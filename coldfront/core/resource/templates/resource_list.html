@@ -66,11 +66,15 @@ Resource List
       </thead>
       <tbody>
         {% for resource in resource_list %}
+        <tr>
           <tr>
-            <td><a href="/resource/{{resource.id}}/">{{ resource.id }}</a></td>
-            <td>{{ resource }}</td>
-            <td>{{ resource.parent_resource }}</td>
-            <td>{{ resource.resource_type.name }}</td>
+            {% if resource.is_available %}
+              <td><a href="/resource/{{resource.id}}/">{{ resource.id }}</a></td>
+              <td>{{ resource }}</td>
+              <td>{{ resource.parent_resource }}</td>
+              <td>{{ resource.resource_type.name }}</td>
+            </tr>
+            {% endif %}
           </tr>
         {% endfor %}
       </tbody>

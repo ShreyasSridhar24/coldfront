@@ -13,7 +13,7 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Q
 from django.db.models.query import QuerySet
 from django.forms import formset_factory
-from django.http import HttpResponseRedirect, JsonResponse, HttpResponseBadRequest
+from django.http import HttpResponseRedirect, JsonResponse, HttpResponseBadRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.utils.html import format_html, mark_safe
@@ -35,7 +35,8 @@ from coldfront.core.allocation.forms import (AllocationAccountForm,
                                              AllocationRemoveUserForm,
                                              AllocationReviewUserForm,
                                              AllocationSearchForm,
-                                             AllocationUpdateForm)
+                                             AllocationUpdateForm,
+                                             AllocationNoteCreateForm)
 from coldfront.core.allocation.models import (Allocation,
                                               AllocationPermission,
                                               AllocationAccount,
@@ -47,7 +48,9 @@ from coldfront.core.allocation.models import (Allocation,
                                               AllocationStatusChoice,
                                               AllocationUser,
                                               AllocationUserNote,
-                                              AllocationUserStatusChoice)
+                                              AllocationUserStatusChoice,
+                                              AllocationNoteTags,
+                                              AllocationUserNoteReciver)
 from coldfront.core.allocation.signals import (allocation_new,
                                                allocation_activate,
                                                allocation_activate_user,
@@ -886,41 +889,87 @@ class AllocationAttributeDeleteView(LoginRequiredMixin, UserPassesTestMixin, Tem
 
 
 class AllocationNoteCreateView(LoginRequiredMixin, UserPassesTestMixin, CreateView):
-    model = AllocationUserNote
-    fields = '__all__'
+    form_class = AllocationNoteCreateForm
+    # fields = '__all__'
     template_name = 'allocation/allocation_note_create.html'
-
     def test_func(self):
         """ UserPassesTestMixin Tests"""
 
+        allocation_obj = get_object_or_404(Allocation, pk=self.kwargs.get('pk'))
+        #  
+        
         if self.request.user.is_superuser:
             return True
-        messages.error( self.request, 'You do not have permission to add allocation notes.')
-        return False
+        else:
+            messages.error(
+                self.request, 'You do not have permission to add allocation notes.')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         pk = self.kwargs.get('pk')
-        allocation_obj = get_object_or_404(Allocation, pk=pk)
-        context['allocation'] = allocation_obj
+        project_obj = get_object_or_404(Allocation, pk=pk)
+        print(project_obj)
+        context['allocation'] = project_obj
+
         return context
 
-    def get_initial(self):
-        initial = super().get_initial()
-        pk = self.kwargs.get('pk')
-        allocation_obj = get_object_or_404(Allocation, pk=pk)
-        author = self.request.user
-        initial['allocation'] = allocation_obj
-        initial['author'] = author
-        return initial
+    
 
-    def get_form(self, form_class=None):
+    def get_form(self, form_class=form_class):
         """Return an instance of the form to be used in this view."""
-        form = super().get_form(form_class)
-        form.fields['allocation'].widget = forms.HiddenInput()
-        form.fields['author'].widget = forms.HiddenInput()
-        form.order_fields([ 'allocation', 'author', 'note', 'is_private' ])
-        return form
+        return form_class(self.kwargs.get('pk'),  **self.get_form_kwargs())
+    
+    def form_valid(self, form) -> HttpResponse:
+        obj = form
+        # obj.author = self.request.user
+        allocation_obj = get_object_or_404(Allocation, pk=self.kwargs.get('pk'))
+        form_complete = AllocationNoteCreateForm(allocation_obj.pk,self.request.POST,initial = {"author":obj.author,"message":obj.data['message']})
+
+        if form_complete.is_valid():
+            form_data = form_complete.cleaned_data
+            new_note_obj = AllocationUserNote.objects.create(
+                allocation = allocation_obj,
+                message = form_data["message"],
+                tags = form_data["tags"],
+                author = self.request.user,
+            )
+
+            # receivers_list = form_data["note_to"]
+            # for user in receivers_list:
+            #     new_rec_obj = AllocationUserNoteReciver.objects.create(
+            #         project = allocation_obj,
+            #         user = User.objects.get(username=user),
+            #         notes = new_note_obj
+            #     )
+                
+            # receivers_list = [
+            #     User.objects.get(username=user).email
+            #     for user in form_data["note_to"]
+            # ]
+            # email_list=[]
+            # for r in receivers_list :
+            #     if r!="":
+            #         email_list.append(r)
+
+            # send_email(
+            #     'New message has been sent to you',
+            #     "A new message from "" has been sent to you - \n ",
+            #     EMAIL_DIRECTOR_EMAIL_ADDRESS,
+            #     email_list,
+            #     []
+            # )
+            
+        # obj.project = allocation_obj
+
+        self.object = obj
+
+        return super().form_valid(form)
+    
+        
+
+
+    # def get_success_url(self):
+    #     return reverse('project-detail', kwargs={'pk': self.kwargs.get('pk')})
 
     def get_success_url(self):
         return reverse('allocation-detail', kwargs={'pk': self.kwargs.get('pk')})

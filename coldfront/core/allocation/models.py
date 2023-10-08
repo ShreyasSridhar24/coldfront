@@ -358,23 +358,64 @@ class AllocationAdminNote(TimeStampedModel):
     def __str__(self):
         return self.note
 
+
+class AllocationNoteTags(TimeStampedModel):
+    name = models.CharField(max_length=64)
+
+    class AllocationNoteTagManager(models.Manager):
+        def get_by_natural_key(self, name):
+            return self.get(name=name)
+    objects = AllocationNoteTagManager()
+
+    def __str__(self):
+        return self.name
+
+    def natural_key(self):
+        return (self.name,)
+
+    class Meta:
+        ordering = ['name', ]
+
+
 class AllocationUserNote(TimeStampedModel):
-    """ An allocation user note is a note that an user makes on an allocation.
+    """ A project user message is a message sent to a user in a project. 
     
     Attributes:
-        allocation (Allocation): links the allocation to the note
-        author (User): represents the User class of the user who authored the note
-        is_private (bool): indicates whether or not the note is private
-        note (str): text input from the user containing the note
+        project (Project): links the project the message is from to the message
+        author (User): represents the user who authored the message
+        is_private (bool): indicates whether or not the message is private
+        message (str): text input from the user containing the message
     """
 
     allocation = models.ForeignKey(Allocation, on_delete=models.CASCADE)
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     is_private = models.BooleanField(default=True)
-    note = models.TextField()
+    tags = models.ForeignKey(AllocationNoteTags, on_delete=models.CASCADE,null=True,default=None)
+    test = models.TextField(default="True")
+    is_private = models.BooleanField(default=False)
+    message = models.TextField()
+    note_to = models.ForeignKey(User, on_delete=models.CASCADE, related_name="NoteTo",null=True)
+    message = models.TextField()
 
     def __str__(self):
-        return self.note
+        return self.message
+    
+class AllocationUserNoteReciver(TimeStampedModel):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    user = models.ForeignKey(User,on_delete=models.CASCADE)
+    notes = models.ForeignKey(AllocationUserNote,on_delete=models.CASCADE)
+
+    class Meta:
+        unique_together = ('user', 'notes')
+        verbose_name_plural = "Project User Note"
+
+    class ProjectUserMessageRecieverManager(models.Manager):
+            def get_by_natural_key(self, name):
+                return self.get(name=name)
+
+
+    objects = ProjectUserMessageRecieverManager()
+
 
 class AttributeType(TimeStampedModel):
     """ An attribute type indicates the data type of the attribute. Examples include Date, Float, Int, Text, and Yes/No. 
